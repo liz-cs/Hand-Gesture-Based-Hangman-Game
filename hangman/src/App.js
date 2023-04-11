@@ -1,226 +1,122 @@
-import React, { useState, useRef } from 'react'
-import { Button } from './components/Result/styled'
-import AnswerBox from './components/AnswerBox'
-import FailBox from './components/FailBox'
-import Result from './components/Result'
-import Human from './components/Human'
+import React, { useState, useEffect } from 'react'
+import './Hangman.css';
 import Home from './Home'
-import {
-  Gallow,
-  DownPipe,
-  RightBlueTriangle,
-  Input,
-  AppWrapper,
-  GameInstruction,
-} from './styled'
-
 // eslint-disable-next-line import/no-anonymous-default-export
 export default () => {
-  const [wordFromAPI, setWordFromAPI] = useState([])
-  const [isPaused, setIsPaused] = useState(false)
-  const [isGameOver, setIsGameOver] = useState(false)
-  const [resultBox, setResultBox] = useState({
-    disabled: false,
-    title: 'Hangman',
-    buttonLabel: 'Start Game',
-  })
-  const [failedLetters, setFailedLetters] = useState([])
-  const [correctLetters, setCorrectLetters] = useState([])
-  const [word, setWord] = useState('')
-  const inputRef = useRef(null)
+  // eslint-disable-next-line no-use-before-define
+  const [guessWord, setGuessWord] = useState('');
+  const [wordBoard, setWordBoard] = useState([]);
+  const [chancesLeft, setChancesLeft] = useState(8);
+  const [inputLetter, setInputLetter] = useState('');
+  const [restart, setRestart] = useState(false);
 
-  const handOnKeyPress = event => {
-    let keyChar = event.key
-    event.preventDefault()
-    if (
-      wordFromAPI.length > 0 &&
-      'qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM'.indexOf(keyChar) >
-        -1
-    ) {
-      keyChar = keyChar.toUpperCase()
-      if (
-        !failedLetters.find(x => x === keyChar) &&
-        !correctLetters.find(x => x === keyChar)
-      ) {
-        let count = 0
-        for (let i = 0; i < wordFromAPI.length; i++) {
-          if (keyChar === wordFromAPI[i]) {
-            count++
-            const newCorrectLetters = correctLetters.concat([keyChar])
-            setCorrectLetters(newCorrectLetters)
-            countCorrectLetters(newCorrectLetters)
-            return
-          }
-        }
-        if (count === 0) {
-          if (failedLetters.length === 10) {
-            setResultBox({
-              disabled: false,
-              title: `Game Over { word: ${word} }`,
-              buttonLabel: 'Restart Game',
-            })
-            setIsGameOver(true)
-          }
-          setFailedLetters(failedLetters.concat([keyChar]))
-        }
-      }
+  // Initialize the board
+  const board = (guessWord) => {
+    const numOfLetter = guessWord.length;
+    const newBoard = new Array(numOfLetter).fill('_');
+    return newBoard;
+  }
+
+  // Helper function to get a new game word randomly from a word list
+  useEffect(() => {
+    async function fetchWord() {
+      const response = await fetch('/words.txt');
+      const text = await response.text();
+      const words = text.split(/\s+/);
+      const randomIndex = Math.floor(Math.random() * words.length);
+      const randomWord = words[randomIndex];
+      setGuessWord(randomWord);
+    }
+    fetchWord();
+  }, [restart]);
+
+  useEffect(() => {
+    if (guessWord) {
+      setWordBoard(board(guessWord));
+    }
+  }, [guessWord])
+
+ // Handle input letter and update word board and chances left accordingly
+ function handleInputLetter() {
+  if (isGameOver()) {
+    return;
+  }
+   
+  if (inputLetter.length > 1 || inputLetter.length === 0) {
+    // setChancesLeft(chancesLeft - 1);
+    // setInputLetter('');
+    return;
+  }
+  const lowercaseL = inputLetter.toLowerCase();
+  if (wordBoard.includes(lowercaseL)) {
+    setInputLetter('');
+    return;
+  }
+  let count = 0;
+  const newBoard = [...wordBoard];
+  for (let i = 0; i < guessWord.length; i++) {
+    if (guessWord[i] === lowercaseL) {
+      newBoard[i] = lowercaseL;
+      count += 1;
     }
   }
-
-  const emptyBoxList = () => {
-    let arrayOfSpace = []
-    if (wordFromAPI.length > 0) {
-      const arraySize = wordFromAPI.length
-      for (let x = 0; x < 12 - arraySize; x++) {
-        arrayOfSpace.push(' ')
-      }
-    }
-    return arrayOfSpace
+  if (count === 0) {
+    setChancesLeft(chancesLeft - 1);
   }
+  setWordBoard(newBoard);
+  setInputLetter('');
+}
 
-  const startGame = () => {
-    setResultBox({
-      disabled: true,
-    })
-    setFailedLetters([])
-    setCorrectLetters([])
-    setWordFromAPI([])
-    setWord('')
-    getDataFromAPI()
-    setIsGameOver(false)
-    inputRef.current.focus()
+// Check if game is over
+function isGameOver() {
+  if (chancesLeft === 0) {
+    return true;
   }
-
-  const continueGame = () => {
-    setResultBox({
-      disabled: true,
-    })
-    inputRef.current.focus()
-  }
-
-  const wordSetter = word => {
-    let wordArr = word.toUpperCase().split('')
-    wordArr.map(item => {
-      item === '-' && wordArr.splice(wordArr.indexOf('-'), 1)
-      item === ' ' && wordArr.splice(wordArr.indexOf(' '), 1)
-      return item
-    })
-
-    setWordFromAPI(wordArr)
-    setWord(word)
-  }
-
-  const getDataFromAPI = () => {
-    const params = {
-      hasDictionaryDef: true,
-      minCorpusCount: 0,
-      maxCorpusCount: -1,
-      maxDictionaryCount: -1,
-      minLength: 3,
-      maxLength: 12,
-      api_key: 'a2a73e7b926c924fad7001ca3111acd55af2ffabf50eb4ae5',
-    }
-    let url = new URL('http://api.wordnik.com/v4/words.json/randomWord')
-    Object.keys(params).forEach(key =>
-      url.searchParams.append(key, params[key])
-    )
-    fetch(url, {
-      method: 'GET',
-    })
-      .then(response => {
-        const responseStatus = response.status
-        if (responseStatus >= 400 && responseStatus <= 500) {
-          throw Error('API error, creating random word localy!')
-        }
-        return response.json()
-      })
-      .then(response => {
-        wordSetter(response.word)
-        return response.status
-      })
-      .catch(error => {
-        console.log(error)
-        const fruits = [
-          'Apple',
-          'Orange',
-          'Pear',
-          'Lemon',
-          'Kiwi',
-          'Watermelon',
-          'Strawberry',
-          'Banana',
-        ]
-        const randomFruit = fruits[Math.floor(Math.random() * fruits.length)]
-        wordSetter(randomFruit)
-      })
-  }
-
-  const countCorrectLetters = correctLetters => {
-    let uniqueLetters = filterUniqueItems(wordFromAPI)
-    if (correctLetters.length === uniqueLetters.length) {
-      setResultBox({
-        disabled: false,
-        title: '★ You Won! ★',
-        buttonLabel: 'Restart Game',
-      })
-      setIsGameOver(true)
+  for (const letter of wordBoard) {
+    if (letter === '_') {
+      return false;
     }
   }
+  return true;
+}
 
-  const filterUniqueItems = items => {
-    const obj = {},
-      uniqueItems = []
-    for (var i = 0, l = items.length; i < l; ++i) {
-      if (obj.hasOwnProperty(items[i])) {
-        continue
-      }
-      uniqueItems.push(items[i])
-      obj[items[i]] = 1
+// Check if player wins
+function getWinOrNot() {
+  for (const letter of wordBoard) {
+    if (letter === '_') {
+      return false;
     }
-    return uniqueItems
   }
+  return true;
+}
 
   return (
-    <><AppWrapper>
-      <GameInstruction>Press any keys (letters) to play.</GameInstruction>
-
-      <Gallow>
-        <DownPipe />
-        <Input
-          ref={inputRef}
-          {...(!isGameOver && !isPaused && { onKeyDown: handOnKeyPress })}
-          onFocus={() => setIsPaused(false)}
-          onBlur={() => {
-            if (!isGameOver) {
-              setIsPaused(true)
-              setResultBox({
-                title: 'Game is Paused',
-                disabled: false,
-                buttonLabel: 'continue',
-              })
-            }
-          } } />
-      </Gallow>
-      <Human failedLetterCount={failedLetters.length} />
-
-      <FailBox failedLetters={failedLetters} />
-      <AnswerBox
-        wordFromAPI={wordFromAPI}
-        correctLetters={correctLetters}
-        spaces={emptyBoxList()} />
-
-      <RightBlueTriangle />
-      <Result
-        title={resultBox.title}
-        disabled={resultBox.disabled}
-        buttonLabel={resultBox.buttonLabel}
-        buttonAction={isPaused ? continueGame : startGame} />
-      {!isPaused && <Button pause> Pause Game</Button>}
-    </AppWrapper>
-      <div>
-        <Home />
+    <div className="Hangman">
+      <div className="Hangman-image">
+        {isGameOver() && getWinOrNot() ? <img src="/9.jpeg" class="my-image" alt="hangman" /> : <img src={`/${chancesLeft}.jpeg`} class="my-image" alt="hangman" />}
       </div>
-    </>
-    
-  )
+      <div className="Hangman-word">
+        <div>
+          <Home />
+        </div>
+        <div className="Hangman-wordBoard">
+          {wordBoard.map((letter, index) => (
+            <span key={index} className="Hangman-letter">{letter} </span>
+          ))}
+        </div>
+        <div>Hint: {guessWord}, just for testing</div>
+        <div className="Hangman-chancesLeft">Chances left: {chancesLeft}</div>
+        <div className="Hangman-input">
+          <input type="text" maxLength="1" value={inputLetter} onChange={(event) => setInputLetter(event.target.value)} />
+          <button onClick={handleInputLetter}>Submit</button>
+        </div>
+        {isGameOver() &&
+          <div className="Hangman-gameOverMessage">
+            {getWinOrNot() ? "Congratulations! You won!" : "Game over! The word is: " + guessWord}
+            <button onClick={e => { setRestart(!restart); setChancesLeft(8); }}>Play again!</button>
+          </div>
+          }
+      </div>
+    </div>
+  );
 }
